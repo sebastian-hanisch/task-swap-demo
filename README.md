@@ -17,7 +17,7 @@ venv, eigene Tests, eigenes Deployment), daher werden gemeinsame Bausteine
 kopiert statt importiert - dieselbe Linie teilt sich das Vehikel über die Zeit,
 nicht über gemeinsamen Code.
 
-## Die drei Stufen
+## Die drei Stufen - und warum "mehrere Agenten" hier tatsächlich etwas bedeutet
 
 | Stufe | Informationsstand | Suchkraft | Symbol |
 |---|---|---|---|
@@ -32,18 +32,39 @@ wandert je Richtung, keine einseitigen "Geschenke", keine Umsortierung innerhalb
 eines Agenten) und akzeptiert pro Runde den besten gefundenen Tausch (steilster
 Abstieg), bis keiner mehr verbessert (**lokales Optimum**).
 
+Mechanisch ist das zunächst nichts weiter als Greedy-Konstruktion (Phase 1) +
+Lokalsuche-Politur (Phase 2) - ein Muster, das im Portfolio bereits mehrfach
+existiert (`quaycrane-demo`, `dock-demo`), nur mit Agenten-Vokabular. Der einzige
+echte Unterschied ist eine **Kommunikationsreichweite**: ein Agentenpaar wird nur
+für einen Tausch betrachtet, wenn die rohe physische Distanz ihrer Endpositionen
+die eingestellte Reichweite nicht überschreitet (unabhängig von der Anfahrtszeit
+pro Positionseinheit - zwei getrennte Größen). Ohne dieses Gate wäre die
+Verhandlung ununterscheidbar von einer zentralen Lokalsuche. Ein `tier_comparison`
+-Vergleich (`cn_negotiation_evaluation.py`) rechnet zusätzlich zwei Diagnose-Läufe
+mit: uneingeschränkte Kommunikation (bestmöglicher Fall) und Reichweite 0
+(Totalausfall) - das macht sowohl den **Preis der Dezentralität** (Qualitätsverlust
+durch begrenzte Kommunikation) als auch ihre **Robustheit** (bei Totalausfall
+liefert das System immer noch das vollständige, gültige Contract-Net-Ergebnis,
+nie einen Absturz) als echte Zahlen sichtbar, statt sie nur zu behaupten. Contract
+Net selbst (Phase 1) braucht dabei nie Agent-zu-Agent-Kommunikation - nur die
+Verhandlung tut es.
+
 ## Die gelehrte (und ehrlich begrenzte) Verbesserung
 
 Anders als contract-net-demo, wo die Lücke zu CP-SAT nur wächst, zeigt dieses
 Stück eine **teilweise Korrektur**: die Verhandlung schließt oft einen
 erheblichen Teil der Lücke, aber - weil paarweise Tausche nur eine eingeschränkte
-Nachbarschaft absuchen - nicht immer die ganze. Ein Kalibrierungs-Sweep
-(`calibrate_presets.py`, seither gelöscht) zeigte alle drei Fälle real: Instanzen,
-die bereits swap-optimal sind (0 Tausche), Instanzen mit einem einzigen Tausch,
-der den Großteil der Lücke schließt, und Instanzen, die trotz erreichtem lokalen
-Optimum eine spürbare Lücke behalten - genau die Motivation für die übrigen,
-noch nicht gebauten Stücke dieser Linie (Kombinatorische Auktionen, Distributed
-Constraint Optimization, Multi-Agent Reinforcement Learning).
+Nachbarschaft absuchen - nicht immer die ganze. Zwei Kalibrierungs-Sweeps
+(`calibrate_presets.py`, jeweils seither gelöscht) zeigten alle Fälle real:
+Instanzen, die bereits swap-optimal sind (0 Tausche), Instanzen mit einem
+einzigen Tausch, der den Großteil der Lücke schließt, Instanzen, die trotz
+erreichtem lokalen Optimum eine spürbare Lücke behalten, und - mit der
+Kommunikationsreichweite - Instanzen, bei denen ein uneingeschränkt möglicher,
+fast optimaler Tausch allein an der physischen Distanz zweier Agenten scheitert
+(76% Lücke bleiben bestehen, obwohl uneingeschränkte Kommunikation sie auf 1%
+gedrückt hätte). Das motiviert die übrigen, noch nicht gebauten Stücke dieser
+Linie (Kombinatorische Auktionen, Distributed Constraint Optimization,
+Multi-Agent Reinforcement Learning).
 
 ## Referenzlöser
 
@@ -66,26 +87,35 @@ Constraint Optimization, Multi-Agent Reinforcement Learning).
   auf die dokumentierte Rundungstoleranz des skalierten CP-SAT-Modells).
 - **Determinismus**: gleiche Instanz, zweimal verhandelt, liefert identische
   Tausch-Sequenz (deterministisches Tie-Breaking).
+- **Kommunikationsreichweite**: ein Agentenpaar wird nur betrachtet, wenn die
+  rohe Distanz ihrer Endpositionen die eingestellte Reichweite nicht
+  überschreitet - hand-berechnete Grenzfall-Tests sichern die `<=`-Grenze exakt
+  ab, unabhängig von `travel_time_per_unit`.
+- **Robustheits-Kern**: bei Reichweite 0 (Totalausfall) reduziert sich die
+  Verhandlung IMMER exakt auf das unveränderte Contract-Net-Ergebnis - nie ein
+  Absturz oder ungültiger Zustand, über alle Agentenzahlen und viele Seeds
+  geswept.
 - **Preset-Kalibrierung**: `test_presets_produce_expected_gap_and_closure_bands`
-  hält die gemessenen Lücken-/Schließungsbänder der vier Presets als Regression
-  fest.
+  hält die gemessenen Lücken-/Schließungsbänder aller fünf Presets (inkl. des
+  Kommunikations-Presets mit seiner `decentralization_cost_pct`-Schranke) als
+  Regression fest.
 
 ## Dateistruktur
 
 | Datei | Inhalt |
 |---|---|
-| `app.py` | Streamlit-Hauptablauf: Presets, Einstellungen, zwei Phasen-Animationen, Dreiweg-Vergleich |
-| `cn_constants.py` | Defaults, Regler-Grenzen, `PRESETS`, Verhandlungs-Konstanten |
+| `app.py` | Streamlit-Hauptablauf: Presets, Einstellungen, zwei Phasen-Animationen, Vierweg-Vergleich |
+| `cn_constants.py` | Defaults, Regler-Grenzen, `PRESETS` (inkl. Kommunikationsreichweite), Verhandlungs-Konstanten |
 | `cn_presets.py` | `SettingSpec`/`SETTING_SPECS`, Permalink-Logik (unverändert aus contract-net-demo) |
 | `cn_scenario.py` | Zufällige Kran-zu-Auftrag-Instanzen (unverändert aus contract-net-demo) |
 | `cn_bidding.py` | Die Gebotsformel (unverändert aus contract-net-demo) |
 | `cn_protocol.py` | Contract-Net-Vergabeschleife, Phase 1 (unverändert aus contract-net-demo) |
 | `cn_schedule.py` | Gemeinsamer Baustein: Zuteilung → Fertigstellungszeiten/Makespan |
-| `cn_negotiation.py` | Die Task-Swap-Verhandlung, Phase 2 - das neue Kernstück |
+| `cn_negotiation.py` | Die Task-Swap-Verhandlung, Phase 2, inkl. Kommunikations-Gate - das Kernstück |
 | `cn_ortools_reference.py` | Echter Google-OR-Tools-CP-SAT-Solver (zentrale Referenz) |
 | `cn_bruteforce.py` | Unabhängige Referenzlösung für Tests |
 | `cn_evaluation.py` | Contract-Net-Kennzahlen (Phase-1-Rekapitulation) |
-| `cn_negotiation_evaluation.py` | Dreiweg-Vergleich (roh / verhandelt / CP-SAT) inkl. Lücken-Schließung |
+| `cn_negotiation_evaluation.py` | Vierweg-Vergleich (roh / verhandelt-real / verhandelt-diagnose-uneingeschränkt / CP-SAT) inkl. Preis der Dezentralität und Worst-Case-Diagnose |
 | `cn_visualization.py` | Gantt-Chart + Gebots-Balkendiagramm für Phase 1 (unverändert aus contract-net-demo) |
 | `cn_negotiation_visualization.py` | Gantt-Chart mit Tausch-Hervorhebung für Phase 2 |
 | `tests/` | Bausteine-Invarianten, Verhandlungs-Invarianten (inkl. lokales-Optimum-Verifikation), Preset-Regression |

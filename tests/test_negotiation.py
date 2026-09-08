@@ -195,3 +195,104 @@ def test_tie_break_is_deterministic():
         first = negotiate(instance, result)
         second = negotiate(instance, result)
         assert first.swaps == second.swaps, f"seed={seed}"
+
+
+def test_default_communication_range_is_truly_unconstrained():
+    for seed in range(15):
+        instance = generate_instance(
+            n_jobs=8, n_agents=3, duration_variability=0.5, travel_time_per_unit=1.0, seed=seed
+        )
+        result = run_protocol(instance)
+        default = negotiate(instance, result)
+        explicit_inf = negotiate(instance, result, communication_range=float("inf"))
+        assert default.swaps == explicit_inf.swaps, f"seed={seed}"
+        assert default.final_makespan == explicit_inf.final_makespan, f"seed={seed}"
+
+
+def test_communication_range_hand_computed_gate_boundary():
+    # Wiederverwendet das Beispiel aus test_swap_reduces_makespan_hand_computed_tiny_example:
+    # Agent 0 endet bei Position 0, Agent 1 bei Position 50 (nach dem Tausch) - aber die
+    # ENDPOSITIONEN nach Phase 1 (vor dem Tausch) sind hier relevant: A0 bei 0.0 (Job 0),
+    # A1 bei 50.0 (Job 2) - Distanz 50.0 exakt.
+    jobs = (
+        Job(index=0, position=0.0, duration=10.0),
+        Job(index=1, position=0.0, duration=1.0),
+        Job(index=2, position=50.0, duration=1.0),
+    )
+    instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 0.0))
+    result = run_protocol(instance)
+    assert result.steps[-1].agent_positions_after == (0.0, 50.0)
+
+    blocked = negotiate(instance, result, communication_range=49.0)
+    assert blocked.swaps == ()
+    assert blocked.final_makespan == 52.0
+
+    allowed = negotiate(instance, result, communication_range=50.0)
+    assert len(allowed.swaps) == 1
+    assert allowed.final_makespan == 51.0
+
+
+def test_communication_range_uses_raw_distance_not_travel_time():
+    jobs = (
+        Job(index=0, position=0.0, duration=10.0),
+        Job(index=1, position=0.0, duration=1.0),
+        Job(index=2, position=50.0, duration=1.0),
+    )
+    for travel_time_per_unit in (0.2, 1.0, 2.0):
+        instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 0.0), travel_time_per_unit=travel_time_per_unit)
+        result = run_protocol(instance)
+        blocked = negotiate(instance, result, communication_range=49.0)
+        assert blocked.swaps == (), f"travel_time_per_unit={travel_time_per_unit}"
+
+
+def test_communication_range_final_positions_use_start_position_for_untouched_agents():
+    instance = generate_instance(n_jobs=2, n_agents=4, duration_variability=0.5, travel_time_per_unit=1.0, seed=1)
+    result = run_protocol(instance)
+    empty_agents = {a for a, jobs in result.schedules.items() if len(jobs) == 0}
+    assert empty_agents, "expected at least one idle agent for this fixture"
+    for communication_range in (0.0, 5.0, 20.0):
+        negotiation = negotiate(instance, result, communication_range=communication_range)
+        for swap in negotiation.swaps:
+            assert swap.agent_a not in empty_agents
+            assert swap.agent_b not in empty_agents
+
+
+def test_communication_range_zero_on_single_agent_is_a_noop():
+    instance = generate_instance(n_jobs=6, n_agents=1, duration_variability=0.5, travel_time_per_unit=1.0, seed=0)
+    result = run_protocol(instance)
+    negotiation = negotiate(instance, result, communication_range=0.0)
+    assert negotiation.swaps == ()
+    assert negotiation.final_schedules == result.schedules
+
+
+def test_communication_range_preserves_job_completeness_and_determinism_when_constrained():
+    for communication_range in (0.0, 5.0, 10.0, float("inf")):
+        for seed in range(10):
+            instance = generate_instance(
+                n_jobs=10, n_agents=3, duration_variability=0.5, travel_time_per_unit=1.0, seed=seed
+            )
+            result = run_protocol(instance)
+            first = negotiate(instance, result, communication_range=communication_range)
+            second = negotiate(instance, result, communication_range=communication_range)
+            assert first.swaps == second.swaps, f"range={communication_range} seed={seed}"
+
+            all_jobs = sorted(j for jobs in first.final_schedules.values() for j in jobs)
+            assert all_jobs == list(range(10)), f"range={communication_range} seed={seed}"
+            for agent_id, jobs in first.final_schedules.items():
+                assert list(jobs) == sorted(jobs), f"range={communication_range} seed={seed} agent={agent_id}"
+
+
+def test_zero_communication_range_reduces_to_raw_cnp_result():
+    # Der Robustheits-Kern: bei Totalausfall (Reichweite=0) existiert kein zulaessiges
+    # Agentenpaar - das Ergebnis ist dann EXAKT das unveraenderte Contract-Net-Ergebnis,
+    # nie ein Absturz oder ein ungueltiger Zustand.
+    for n_agents in (1, 2, 3, 4):
+        for seed in range(15):
+            instance = generate_instance(
+                n_jobs=8, n_agents=n_agents, duration_variability=0.5, travel_time_per_unit=1.0, seed=seed
+            )
+            result = run_protocol(instance)
+            negotiation = negotiate(instance, result, communication_range=0.0)
+            assert negotiation.swaps == (), f"n_agents={n_agents} seed={seed}"
+            assert negotiation.final_makespan == result.makespan, f"n_agents={n_agents} seed={seed}"
+            assert negotiation.final_schedules == result.schedules, f"n_agents={n_agents} seed={seed}"

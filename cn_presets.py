@@ -30,6 +30,9 @@ SETTING_SPECS = {
         "travel", float, C.DEFAULT_TRAVEL_TIME_PER_UNIT, C.TRAVEL_TIME_PER_UNIT_MIN, C.TRAVEL_TIME_PER_UNIT_MAX
     ),
     "seed_input": SettingSpec("seed", int, C.DEFAULT_SEED, 0, 2_000_000_000),
+    "communication_range_slider": SettingSpec(
+        "comm", float, C.DEFAULT_COMMUNICATION_RANGE, C.COMMUNICATION_RANGE_MIN, C.COMMUNICATION_RANGE_MAX
+    ),
 }
 
 
@@ -66,13 +69,14 @@ def load_permalink_settings():
     st.session_state["permalink_loaded"] = True
 
 
-def sync_query_params(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed):
+def sync_query_params(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed, communication_range):
     try:
         st.query_params["jobs"] = str(int(n_jobs))
         st.query_params["agents"] = str(int(n_agents))
         st.query_params["var"] = str(duration_variability)
         st.query_params["travel"] = str(travel_time_per_unit)
         st.query_params["seed"] = str(int(seed))
+        st.query_params["comm"] = str(communication_range)
     except Exception:
         pass
 
@@ -84,6 +88,7 @@ def apply_preset(name):
     st.session_state["duration_variability_slider"] = p["duration_variability"]
     st.session_state["travel_time_per_unit_slider"] = p["travel_time_per_unit"]
     st.session_state["seed_input"] = p["seed"]
+    st.session_state["communication_range_slider"] = p["communication_range"]
     st.session_state["force_regen"] = True
 
 

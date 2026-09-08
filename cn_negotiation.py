@@ -11,7 +11,18 @@ Terminiert, sobald ein vollständiger Durchlauf über alle Agentenpaare und
 Auftragspaare keinen verbessernden Tausch mehr findet (lokales Optimum -
 die ehrliche Schwäche dieses Stücks: eine auf paarweise, wechselseitige
 Tausche beschränkte lokale Suche muss nicht das globale Optimum erreichen,
-das der zentrale CP-SAT-Referenzlöser findet)."""
+das der zentrale CP-SAT-Referenzlöser findet).
+
+Ein Agentenpaar wird nur betrachtet, wenn die ROHE physische Distanz ihrer
+Endpositionen (nach Phase 1) die `communication_range` nicht überschreitet -
+das ist der einzige Punkt in dieser Demo, an dem "mehrere Agenten" tatsächlich
+etwas anderes bedeutet als "eine zentrale lokale Suche": Phase 1 (Bieten)
+braucht ohnehin nie Agent-zu-Agent-Kommunikation, nur diese Verhandlung tut es.
+Bei `communication_range=0` findet sich kein einziges gültiges Paar - das
+Ergebnis ist dann exakt das unveränderte Contract-Net-Ergebnis, nie ein Absturz
+oder ein ungültiger Zustand (siehe `test_zero_communication_range_reduces_to_
+raw_cnp_result`) - der Ausfall degradiert graduell, statt total zu versagen,
+wie es ein zentraler Solver ohne vollständige Information tun würde."""
 
 from dataclasses import dataclass
 
@@ -55,9 +66,14 @@ def _apply_swap(schedules, agent_a, agent_b, job_from_a, job_from_b):
     return new_schedules
 
 
-def negotiate(instance, protocol_result, max_rounds=50, epsilon=EPSILON):
+def negotiate(instance, protocol_result, max_rounds=50, epsilon=EPSILON, communication_range=float("inf")):
     schedules = {a: tuple(jobs) for a, jobs in protocol_result.schedules.items()}
     agent_finish_times, makespan = schedule_from_assignment(instance, schedules)
+
+    final_positions = (
+        protocol_result.steps[-1].agent_positions_after if protocol_result.steps
+        else instance.agent_start_positions
+    )
 
     swaps = []
     round_number = 0
@@ -72,6 +88,8 @@ def negotiate(instance, protocol_result, max_rounds=50, epsilon=EPSILON):
         for i in range(len(agent_ids)):
             for j in range(i + 1, len(agent_ids)):
                 agent_a, agent_b = agent_ids[i], agent_ids[j]
+                if abs(final_positions[agent_a] - final_positions[agent_b]) > communication_range:
+                    continue
                 for job_from_a in schedules[agent_a]:
                     for job_from_b in schedules[agent_b]:
                         candidate_schedules = _apply_swap(schedules, agent_a, agent_b, job_from_a, job_from_b)

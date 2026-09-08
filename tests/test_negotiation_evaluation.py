@@ -1,28 +1,37 @@
 import cn_constants as C
 import cn_negotiation_evaluation
 from cn_negotiation import negotiate
-from cn_negotiation_evaluation import three_way_comparison
+from cn_negotiation_evaluation import tier_comparison
 from cn_ortools_reference import ExactResult
 from cn_protocol import run_protocol
-from cn_scenario import generate_instance
+from cn_scenario import Instance, Job, generate_instance
 
 
-def test_three_way_comparison_matches_manual_gap_computation():
+def _instance(jobs, n_agents=2, agent_start_positions=None, travel_time_per_unit=1.0):
+    if agent_start_positions is None:
+        agent_start_positions = tuple(0.0 for _ in range(n_agents))
+    return Instance(
+        n_jobs=len(jobs), n_agents=n_agents, jobs=jobs,
+        agent_start_positions=agent_start_positions, travel_time_per_unit=travel_time_per_unit,
+    )
+
+
+def test_tier_comparison_matches_manual_gap_computation():
     instance = generate_instance(n_jobs=8, n_agents=2, duration_variability=0.4, travel_time_per_unit=1.0, seed=0)
     result = run_protocol(instance)
-    negotiation = negotiate(instance, result)
-    cmp = three_way_comparison(instance, negotiation)
+    negotiation = negotiate(instance, result, communication_range=float("inf"))
+    cmp = tier_comparison(instance, negotiation, communication_range=float("inf"))
 
     assert cmp["ortools_feasible"]
     ortools = cmp["ortools_makespan"]
     expected_gap_raw = (cmp["cnp_makespan"] - ortools) / ortools * 100.0
-    expected_gap_negotiated = (cmp["negotiated_makespan"] - ortools) / ortools * 100.0
+    expected_gap_constrained = (cmp["constrained_makespan"] - ortools) / ortools * 100.0
     assert abs(cmp["gap_pct_raw"] - expected_gap_raw) < 1e-9
-    assert abs(cmp["gap_pct_negotiated"] - expected_gap_negotiated) < 1e-9
+    assert abs(cmp["gap_pct_constrained"] - expected_gap_constrained) < 1e-9
 
     if abs(expected_gap_raw) >= 1e-9:
-        expected_closed = (expected_gap_raw - expected_gap_negotiated) / expected_gap_raw * 100.0
-        assert abs(cmp["gap_closed_pct"] - expected_closed) < 1e-9
+        expected_closed = (expected_gap_raw - expected_gap_constrained) / expected_gap_raw * 100.0
+        assert abs(cmp["gap_closed_pct_constrained"] - expected_closed) < 1e-9
 
 
 def test_gap_closed_pct_none_when_raw_gap_is_zero(monkeypatch):
@@ -32,7 +41,7 @@ def test_gap_closed_pct_none_when_raw_gap_is_zero(monkeypatch):
     # Stub-Solver getestet, der exakt den CNP-Makespan zurückgibt.
     instance = generate_instance(n_jobs=4, n_agents=2, duration_variability=0.0, travel_time_per_unit=1.0, seed=0)
     result = run_protocol(instance)
-    negotiation = negotiate(instance, result)
+    negotiation = negotiate(instance, result, communication_range=float("inf"))
 
     def _stub_solve(instance, time_limit_seconds=10.0):
         return ExactResult(
@@ -41,10 +50,10 @@ def test_gap_closed_pct_none_when_raw_gap_is_zero(monkeypatch):
         )
 
     monkeypatch.setattr(cn_negotiation_evaluation, "solve_with_ortools", _stub_solve)
-    cmp = three_way_comparison(instance, negotiation)
+    cmp = tier_comparison(instance, negotiation, communication_range=float("inf"))
     assert cmp["gap_pct_raw"] is not None
     assert abs(cmp["gap_pct_raw"]) < 1e-9
-    assert cmp["gap_closed_pct"] is None
+    assert cmp["gap_closed_pct_constrained"] is None
 
 
 def test_negotiated_gap_never_negative_beyond_floating_point_noise():
@@ -53,9 +62,9 @@ def test_negotiated_gap_never_negative_beyond_floating_point_noise():
             n_jobs=8, n_agents=2, duration_variability=0.4, travel_time_per_unit=1.0, seed=seed
         )
         result = run_protocol(instance)
-        negotiation = negotiate(instance, result)
-        cmp = three_way_comparison(instance, negotiation)
-        assert cmp["gap_pct_negotiated"] >= -1e-6, f"seed={seed}"
+        negotiation = negotiate(instance, result, communication_range=float("inf"))
+        cmp = tier_comparison(instance, negotiation, communication_range=float("inf"))
+        assert cmp["gap_pct_constrained"] >= -1e-6, f"seed={seed}"
 
 
 def test_negotiated_gap_never_exceeds_raw_gap():
@@ -64,9 +73,9 @@ def test_negotiated_gap_never_exceeds_raw_gap():
             n_jobs=8, n_agents=2, duration_variability=0.4, travel_time_per_unit=1.0, seed=seed
         )
         result = run_protocol(instance)
-        negotiation = negotiate(instance, result)
-        cmp = three_way_comparison(instance, negotiation)
-        assert cmp["gap_pct_negotiated"] <= cmp["gap_pct_raw"] + 1e-6, f"seed={seed}"
+        negotiation = negotiate(instance, result, communication_range=float("inf"))
+        cmp = tier_comparison(instance, negotiation, communication_range=float("inf"))
+        assert cmp["gap_pct_constrained"] <= cmp["gap_pct_raw"] + 1e-6, f"seed={seed}"
 
 
 def test_presets_produce_expected_gap_and_closure_bands():
@@ -78,16 +87,101 @@ def test_presets_produce_expected_gap_and_closure_bands():
             travel_time_per_unit=params["travel_time_per_unit"], seed=params["seed"],
         )
         result = run_protocol(instance)
-        negotiation = negotiate(instance, result)
-        cmp = three_way_comparison(instance, negotiation)
+        negotiation = negotiate(instance, result, communication_range=params["communication_range"])
+        cmp = tier_comparison(instance, negotiation, communication_range=params["communication_range"])
 
         band = expected_bands[name]
-        assert band["swap_count"](len(negotiation.swaps)), (
-            f"{name}: swap_count={len(negotiation.swaps)}"
+        assert band["constrained_swap_count"](cmp["constrained_swap_count"]), (
+            f"{name}: constrained_swap_count={cmp['constrained_swap_count']}"
         )
         assert band["gap_pct_raw"][0] <= cmp["gap_pct_raw"] <= band["gap_pct_raw"][1], (
             f"{name}: gap_pct_raw={cmp['gap_pct_raw']}"
         )
-        if band["gap_closed_pct"] is not None:
-            lo, hi = band["gap_closed_pct"]
-            assert lo <= cmp["gap_closed_pct"] <= hi, f"{name}: gap_closed_pct={cmp['gap_closed_pct']}"
+        if "gap_closed_pct_constrained" in band:
+            lo, hi = band["gap_closed_pct_constrained"]
+            assert lo <= cmp["gap_closed_pct_constrained"] <= hi, (
+                f"{name}: gap_closed_pct_constrained={cmp['gap_closed_pct_constrained']}"
+            )
+        if "unconstrained_swap_count" in band:
+            assert band["unconstrained_swap_count"](cmp["unconstrained_swap_count"]), (
+                f"{name}: unconstrained_swap_count={cmp['unconstrained_swap_count']}"
+            )
+        if "decentralization_cost_pct" in band:
+            lo, hi = band["decentralization_cost_pct"]
+            assert cmp["decentralization_cost_pct"] is not None, f"{name}: decentralization_cost_pct is None"
+            assert lo <= cmp["decentralization_cost_pct"] <= hi, (
+                f"{name}: decentralization_cost_pct={cmp['decentralization_cost_pct']}"
+            )
+
+
+def test_tier_comparison_unconstrained_matches_infinite_range_call():
+    instance = generate_instance(n_jobs=8, n_agents=2, duration_variability=0.4, travel_time_per_unit=1.0, seed=0)
+    result = run_protocol(instance)
+    negotiation = negotiate(instance, result, communication_range=float("inf"))
+    cmp = tier_comparison(instance, negotiation, communication_range=float("inf"))
+    assert cmp["constrained_makespan"] == cmp["unconstrained_makespan"]
+    assert abs(cmp["decentralization_cost_min"]) < 1e-6
+
+
+def test_tier_comparison_blocked_pairs_matches_hand_computed_example():
+    jobs = (
+        Job(index=0, position=0.0, duration=10.0),
+        Job(index=1, position=0.0, duration=1.0),
+        Job(index=2, position=50.0, duration=1.0),
+    )
+    instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 0.0))
+    result = run_protocol(instance)
+
+    negotiation_blocked = negotiate(instance, result, communication_range=49.0)
+    cmp_blocked = tier_comparison(instance, negotiation_blocked, communication_range=49.0)
+    assert cmp_blocked["blocked_pairs"] == ((0, 1, 50.0),)
+
+    negotiation_allowed = negotiate(instance, result, communication_range=50.0)
+    cmp_allowed = tier_comparison(instance, negotiation_allowed, communication_range=50.0)
+    assert cmp_allowed["blocked_pairs"] == ()
+
+
+def test_tier_comparison_worst_case_matches_raw_cnp():
+    for seed in range(15):
+        instance = generate_instance(
+            n_jobs=8, n_agents=3, duration_variability=0.4, travel_time_per_unit=1.0, seed=seed
+        )
+        result = run_protocol(instance)
+        negotiation = negotiate(instance, result, communication_range=5.0)
+        cmp = tier_comparison(instance, negotiation, communication_range=5.0)
+        assert cmp["worst_case_makespan"] == cmp["cnp_makespan"], f"seed={seed}"
+        assert cmp["worst_case_swap_count"] == 0, f"seed={seed}"
+
+
+def test_tier_comparison_reports_positive_decentralization_cost_on_calibrated_preset():
+    params = C.PRESETS["Kommunikation begrenzt den Tausch"]
+    instance = generate_instance(
+        n_jobs=params["n_jobs"], n_agents=params["n_agents"],
+        duration_variability=params["duration_variability"],
+        travel_time_per_unit=params["travel_time_per_unit"], seed=params["seed"],
+    )
+    result = run_protocol(instance)
+    negotiation = negotiate(instance, result, communication_range=params["communication_range"])
+    cmp = tier_comparison(instance, negotiation, communication_range=params["communication_range"])
+    assert cmp["decentralization_cost_min"] > 0
+    assert cmp["decentralization_cost_pct"] > 0
+    assert cmp["constrained_makespan"] > cmp["unconstrained_makespan"]
+
+
+def test_tier_comparison_return_dict_schema():
+    instance = generate_instance(n_jobs=6, n_agents=2, duration_variability=0.3, travel_time_per_unit=1.0, seed=1)
+    result = run_protocol(instance)
+    negotiation = negotiate(instance, result, communication_range=float("inf"))
+    cmp = tier_comparison(instance, negotiation, communication_range=float("inf"))
+    expected_keys = {
+        "cnp_makespan", "communication_range",
+        "constrained_makespan", "constrained_swap_count", "constrained_reached_local_optimum",
+        "unconstrained_makespan", "unconstrained_swap_count",
+        "worst_case_makespan", "worst_case_swap_count",
+        "decentralization_cost_min", "decentralization_cost_pct",
+        "blocked_pairs",
+        "ortools_makespan", "ortools_feasible", "ortools_optimal", "ortools_wall_time",
+        "gap_pct_raw", "gap_pct_constrained", "gap_pct_unconstrained",
+        "gap_closed_pct_constrained", "gap_closed_pct_unconstrained",
+    }
+    assert expected_keys <= set(cmp.keys())

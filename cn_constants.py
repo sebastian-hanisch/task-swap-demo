@@ -14,6 +14,15 @@ DURATION_VARIABILITY_MIN, DURATION_VARIABILITY_MAX = 0.0, 1.0
 TRAVEL_TIME_PER_UNIT_MIN, TRAVEL_TIME_PER_UNIT_MAX = 0.2, 2.0
 
 POSITION_RANGE_MAX = 20.0
+
+# Kommunikationsreichweite (Phase 2 only): wie weit zwei Agenten physisch voneinander
+# entfernt sein dürfen, um überhaupt einen Tausch zu verhandeln - rohe Distanz, NICHT
+# durch travel_time_per_unit skaliert (zwei unabhängige Größen: Anfahrtskosten vs.
+# Kommunikationsreichweite). Max = POSITION_RANGE_MAX, da Agenten-Endpositionen nie
+# weiter auseinander liegen können. Default = Max = uneingeschränkt (reproduziert das
+# Verhalten vor Einführung dieses Reglers exakt).
+DEFAULT_COMMUNICATION_RANGE = POSITION_RANGE_MAX
+COMMUNICATION_RANGE_MIN, COMMUNICATION_RANGE_MAX = 0.0, POSITION_RANGE_MAX
 DURATION_BASE_RANGE = (5, 15)
 # Ein "Spitzen-Auftrag" macht die Auswirkung fehlender Rücksichtnahme sichtbar: mit
 # Wahrscheinlichkeit duration_variability * SPIKE_PROBABILITY_SCALE wird ein Auftrag um
@@ -51,22 +60,34 @@ GAP_REMAINING_WARNING_THRESHOLD_PCT = 20.0
 #   Ein Tausch schließt spürbar:      1 Tausch,  gap_raw=50.4%, gap_neg=10.4%, closed=79%
 #   Mehrere Verhandlungsrunden:       3 Tausche, gap_raw=34.3%, gap_neg=13.0%, closed=62%
 #   Verhandlung stößt an ihre Grenzen: 2 Tausche, gap_raw=56.2%, gap_neg=24.6%, closed=56%
+# Die ersten 4 Presets haben communication_range=POSITION_RANGE_MAX (uneingeschränkt) -
+# ihr Punkt ist die Tausch-Dynamik selbst, nicht Kommunikation. Preset 5 (kalibriert via
+# eigenem calibrate_presets.py-Lauf, 2026-09-07, seither gelöscht) zeigt gezielt einen
+# durch begrenzte Kommunikationsreichweite blockierten Tausch: die beiden Agenten enden
+# 8.8 Positionseinheiten auseinander, die Reichweite ist auf 8.3 gesetzt - knapp zu
+# kurz. Uneingeschränkt schließt der eine mögliche Tausch die Lücke fast vollständig
+# (76.1% -> 1.0%, praktisch CP-SAT-Niveau); eingeschränkt bleibt exakt das rohe
+# CNP-Ergebnis (0 Tausche) - decentralization_cost_pct = 74.4%.
 PRESETS = {
     "Bereits swap-optimal": {
         "n_jobs": 6, "n_agents": 2, "duration_variability": 0.0,
-        "travel_time_per_unit": 1.0, "seed": 12,
+        "travel_time_per_unit": 1.0, "seed": 12, "communication_range": POSITION_RANGE_MAX,
     },
     "Ein Tausch schließt spürbar": {
         "n_jobs": 6, "n_agents": 2, "duration_variability": 0.0,
-        "travel_time_per_unit": 1.0, "seed": 13,
+        "travel_time_per_unit": 1.0, "seed": 13, "communication_range": POSITION_RANGE_MAX,
     },
     "Mehrere Verhandlungsrunden": {
         "n_jobs": 10, "n_agents": 3, "duration_variability": 0.3,
-        "travel_time_per_unit": 1.0, "seed": 17,
+        "travel_time_per_unit": 1.0, "seed": 17, "communication_range": POSITION_RANGE_MAX,
     },
     "Verhandlung stößt an ihre Grenzen": {
         "n_jobs": 10, "n_agents": 2, "duration_variability": 0.5,
-        "travel_time_per_unit": 1.5, "seed": 21,
+        "travel_time_per_unit": 1.5, "seed": 21, "communication_range": POSITION_RANGE_MAX,
+    },
+    "Kommunikation begrenzt den Tausch": {
+        "n_jobs": 6, "n_agents": 2, "duration_variability": 0.0,
+        "travel_time_per_unit": 1.5, "seed": 60, "communication_range": 8.3,
     },
 }
 
@@ -80,6 +101,10 @@ PRESET_HELP = {
     "Verhandlung stößt an ihre Grenzen": "Die Verhandlung erreicht ihr lokales Optimum "
         "und schließt gut die Hälfte der Lücke - doch ein spürbarer Rest bleibt, den nur "
         "ein anderer Mechanismus (Auktionen, DCOP, MARL) noch schließen könnte.",
+    "Kommunikation begrenzt den Tausch": "Zwei Agenten könnten sich hier gegenseitig "
+        "verbessern - aber ihre Endpositionen liegen weiter auseinander, als die "
+        "eingestellte Kommunikationsreichweite erlaubt. Der Preis der Dezentralität "
+        "wird hier sichtbar.",
 }
 
 # Regressions-Bänder für test_negotiation_evaluation.py::
@@ -87,15 +112,23 @@ PRESET_HELP = {
 # falls cn_scenario/cn_bidding/cn_negotiation sich mal ändern.
 PRESET_EXPECTED_BANDS = {
     "Bereits swap-optimal": {
-        "swap_count": lambda n: n == 0, "gap_pct_raw": (8.0, 25.0), "gap_closed_pct": (-0.001, 0.001),
+        "constrained_swap_count": lambda n: n == 0, "gap_pct_raw": (8.0, 25.0),
+        "gap_closed_pct_constrained": (-0.001, 0.001),
     },
     "Ein Tausch schließt spürbar": {
-        "swap_count": lambda n: n == 1, "gap_pct_raw": (35.0, 65.0), "gap_closed_pct": (65.0, 90.0),
+        "constrained_swap_count": lambda n: n == 1, "gap_pct_raw": (35.0, 65.0),
+        "gap_closed_pct_constrained": (65.0, 90.0),
     },
     "Mehrere Verhandlungsrunden": {
-        "swap_count": lambda n: n >= 2, "gap_pct_raw": (20.0, 50.0), "gap_closed_pct": (45.0, 80.0),
+        "constrained_swap_count": lambda n: n >= 2, "gap_pct_raw": (20.0, 50.0),
+        "gap_closed_pct_constrained": (45.0, 80.0),
     },
     "Verhandlung stößt an ihre Grenzen": {
-        "swap_count": lambda n: n >= 1, "gap_pct_raw": (40.0, 75.0), "gap_closed_pct": (40.0, 70.0),
+        "constrained_swap_count": lambda n: n >= 1, "gap_pct_raw": (40.0, 75.0),
+        "gap_closed_pct_constrained": (40.0, 70.0),
+    },
+    "Kommunikation begrenzt den Tausch": {
+        "constrained_swap_count": lambda n: n == 0, "unconstrained_swap_count": lambda n: n >= 1,
+        "gap_pct_raw": (60.0, 90.0), "decentralization_cost_pct": (50.0, 95.0),
     },
 }

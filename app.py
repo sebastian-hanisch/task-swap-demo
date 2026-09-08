@@ -18,7 +18,7 @@ import streamlit as st
 import cn_constants as C
 from cn_evaluation import stats_up_to_step
 from cn_negotiation import negotiate
-from cn_negotiation_evaluation import three_way_comparison
+from cn_negotiation_evaluation import tier_comparison
 from cn_negotiation_visualization import build_negotiation_schedule_figure, describe_swap
 from cn_presets import (
     apply_preset,
@@ -43,18 +43,25 @@ def _compute_protocol(n_jobs, n_agents, duration_variability, travel_time_per_un
 
 
 @st.cache_data(show_spinner=False)
-def _compute_negotiation(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed):
+def _compute_negotiation(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed, communication_range):
     instance = generate_instance(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed)
     result = run_protocol(instance)
-    negotiation = negotiate(instance, result, max_rounds=C.MAX_NEGOTIATION_ROUNDS)
+    negotiation = negotiate(
+        instance, result, max_rounds=C.MAX_NEGOTIATION_ROUNDS, communication_range=communication_range,
+    )
     return negotiation
 
 
 @st.cache_data(show_spinner=False)
-def _compute_comparison(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed):
-    negotiation = _compute_negotiation(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed)
+def _compute_comparison(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed, communication_range):
+    negotiation = _compute_negotiation(
+        n_jobs, n_agents, duration_variability, travel_time_per_unit, seed, communication_range,
+    )
     instance = generate_instance(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed)
-    return three_way_comparison(instance, negotiation, time_limit_seconds=C.ORTOOLS_TIME_LIMIT_SECONDS)
+    return tier_comparison(
+        instance, negotiation, communication_range,
+        max_rounds=C.MAX_NEGOTIATION_ROUNDS, time_limit_seconds=C.ORTOOLS_TIME_LIMIT_SECONDS,
+    )
 
 
 st.title("🔄 Task-Swap-Verhandlung nach dem Contract Net Protocol")
@@ -96,12 +103,30 @@ ein Auftrag gehört, nie die Reihenfolge innerhalb der Warteschlange eines Agent
 "Geschenke" (ein Auftrag wandert ohne Gegenzug). Eine Erweiterung um solche Geschenke
 oder um Mehrfach-Tausche wäre denkbar, ist hier aber bewusst nicht Teil des Mechanismus.
 
-**Die ehrliche Grenze dieses Stücks**: paarweise, wechselseitige Tausche sind eine
-**lokale** Suche - sie können in einem lokalen Optimum steckenbleiben, das oberhalb
-des von CP-SAT gefundenen globalen Optimums liegt. Genau das motiviert die übrigen,
-noch nicht gebauten Stücke dieser Linie (Kombinatorische Auktionen, Distributed
-Constraint Optimization, Multi-Agent Reinforcement Learning), die diese Grenze über
-jeweils einen anderen Mechanismus überwinden.
+**Kommunikationsreichweite**: ein Agentenpaar wird nur betrachtet, wenn die ROHE
+physische Distanz ihrer Endpositionen (nach Phase 1) die eingestellte
+Kommunikationsreichweite nicht überschreitet - unabhängig von der Anfahrtszeit pro
+Positionseinheit (das ist eine zweite, unabhängige Größe: wie teuer eine Fahrt ist,
+ist nicht dasselbe wie wie weit ein Agent überhaupt kommunizieren kann). Das ist der
+einzige Punkt in dieser Demo, an dem "mehrere Agenten" tatsächlich etwas anderes
+bedeutet als "eine zentrale lokale Suche" - ohne dieses Gate würde die Verhandlung
+mechanisch exakt einer zentralen Lokalsuche entsprechen, nur mit Agenten-Vokabular.
+
+**Die ehrliche Grenze dieses Stücks - und ihre Kehrseite**: paarweise, wechselseitige
+Tausche sind eine **lokale** Suche - sie können in einem lokalen Optimum
+steckenbleiben, das oberhalb des von CP-SAT gefundenen globalen Optimums liegt.
+Genau das motiviert die übrigen, noch nicht gebauten Stücke dieser Linie
+(Kombinatorische Auktionen, Distributed Constraint Optimization, Multi-Agent
+Reinforcement Learning), die diese Grenze über jeweils einen anderen Mechanismus
+überwinden. Das ist aber nur die halbe Wahrheit: Contract Net selbst (Phase 1)
+braucht **überhaupt keine Agent-zu-Agent-Kommunikation** - jeder Agent bietet nur
+gegenüber dem Manager. Fällt die Kommunikation für die Verhandlung komplett aus
+(Reichweite = 0), liefert dieses System trotzdem eine vollständige, gültige,
+sofort ausführbare Zuteilung (das reine Contract-Net-Ergebnis) - nur eben ohne
+Verbesserung. Ein zentraler Solver, der zum Rechnen erst alle Information
+einsammeln muss, liefert in diesem Fall **gar nichts**. Dezentralität kostet hier
+Lösungsqualität, aber sie kauft dafür Ausfallsicherheit - kein Single Point of
+Failure. Beides ist Teil der ehrlichen Bilanz, nicht nur die Kosten-Seite.
 
 Damit ergibt sich eine Drei-Stufen-Hierarchie (mit $\text{ALG} \geq \text{LS} \geq
 \text{OPT}$ per Konstruktion):
@@ -152,7 +177,15 @@ with st.sidebar:
         help="Würfelt einen neuen Zufalls-Seed für Auftragspositionen und -dauern.",
     )
 
-sync_query_params(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed)
+    st.markdown("---")
+    st.caption("📡 Verhandlungsparameter (wirkt nur auf Phase 2, nicht auf die Instanz selbst)")
+    communication_range = st.slider(
+        "Kommunikationsreichweite", *bounds("communication_range_slider"), key="communication_range_slider",
+        help="Wie weit zwei Agenten physisch voneinander entfernt sein dürfen, um überhaupt einen Tausch "
+        "zu verhandeln. Maximalwert = uneingeschränkte Kommunikation (kein Agentenpaar wird ausgeschlossen).",
+    )
+
+sync_query_params(n_jobs, n_agents, duration_variability, travel_time_per_unit, seed, communication_range)
 
 scenario_key = (int(n_jobs), int(n_agents), duration_variability, travel_time_per_unit, int(seed))
 
@@ -182,8 +215,8 @@ with play_col:
     auto_play_cnp = st.button("▶️ Abspielen", use_container_width=True, key="cnp_play")
 
 with st.spinner("Verhandle Task-Swaps..."):
-    negotiation = _compute_negotiation(*scenario_key)
-cmp = _compute_comparison(*scenario_key)
+    negotiation = _compute_negotiation(*scenario_key, communication_range)
+cmp = _compute_comparison(*scenario_key, communication_range)
 ortools_makespan = cmp["ortools_makespan"] if cmp["ortools_feasible"] else None
 
 chart_col, bid_col = st.columns([3, 2])
@@ -223,6 +256,11 @@ st.markdown("---")
 # --- Phase 2: Task-Swap-Verhandlung -----------------------------------------
 
 st.markdown("## 🤝 Phase 2: Task-Swap-Verhandlung (offline, lokale Suche)")
+
+negotiation_key = scenario_key + (communication_range,)
+if "neg_step" not in st.session_state or st.session_state.get("neg_step_owner") != negotiation_key:
+    st.session_state["neg_step"] = 0
+    st.session_state["neg_step_owner"] = negotiation_key
 
 n_swaps = len(negotiation.swaps)
 if n_swaps == 0:
@@ -285,70 +323,116 @@ st.markdown("---")
 st.subheader("📐 Wie viel schließt die Nachverhandlung von der Lücke?")
 st.markdown(
     """
-Drei Stufen für Ihre aktuelle Instanz: die rohe **Contract-Net**-Zuteilung, dieselbe
-Zuteilung nach **Task-Swap-Verhandlung**, und das zentrale **CP-SAT**-Optimum, das
-alle Aufträge von Anfang an kennt und erschöpfend sucht.
+Vier Stufen für Ihre aktuelle Instanz: die rohe **Contract-Net**-Zuteilung, die
+Verhandlung bei der **eingestellten Kommunikationsreichweite**, dieselbe
+Verhandlung als Diagnose mit **uneingeschränkter** Kommunikation (identischer
+Algorithmus, nur ohne das Distanz-Limit), und das zentrale **CP-SAT**-Optimum.
 """
 )
 
-vc1, vc2, vc3 = st.columns(3)
-vc1.metric("Contract Net (roh)", f"{cmp['cnp_makespan']:.1f} min")
+vc1, vc2, vc3, vc4 = st.columns(4)
+vc1.metric(
+    "Contract Net (roh)", f"{cmp['cnp_makespan']:.1f} min",
+    help="= Ergebnis bei Kommunikationsreichweite 0 (Verhandlung unmöglich) - siehe Robustheits-Hinweis unten.",
+)
 
-delta_negotiated = cmp["negotiated_makespan"] - cmp["cnp_makespan"]
-if abs(delta_negotiated) < 1e-6:
+delta_constrained = cmp["constrained_makespan"] - cmp["cnp_makespan"]
+if abs(delta_constrained) < 1e-6:
     vc2.metric(
-        "+ Task-Swap-Verhandlung", f"{cmp['negotiated_makespan']:.1f} min",
+        f"+ Verhandlung (Reichweite {communication_range:.1f})", f"{cmp['constrained_makespan']:.1f} min",
         delta="±0.0 min ggü. Contract Net roh - kein Tausch gefunden", delta_color="off",
     )
 else:
     vc2.metric(
-        "+ Task-Swap-Verhandlung", f"{cmp['negotiated_makespan']:.1f} min",
-        delta=f"{delta_negotiated:+.1f} min ggü. Contract Net roh", delta_color="inverse",
+        f"+ Verhandlung (Reichweite {communication_range:.1f})", f"{cmp['constrained_makespan']:.1f} min",
+        delta=f"{delta_constrained:+.1f} min ggü. Contract Net roh", delta_color="inverse",
     )
 
+delta_unconstrained = cmp["unconstrained_makespan"] - cmp["constrained_makespan"]
+vc3.metric(
+    "+ Verhandlung (⚡ unbeschränkt, Diagnose)", f"{cmp['unconstrained_makespan']:.1f} min",
+    delta=f"{delta_unconstrained:+.1f} min ggü. echter Reichweite" if abs(delta_unconstrained) >= 1e-6 else "±0.0 min",
+    delta_color="inverse" if abs(delta_unconstrained) >= 1e-6 else "off",
+    help="Diagnose-Lauf: gleicher Algorithmus, gleiche Nachbarschaft, aber jedes Agentenpaar dürfte "
+    "verhandeln - zeigt, was ohne die Kommunikationsreichweite möglich wäre.",
+)
+
 if cmp["ortools_feasible"]:
-    delta_ortools = cmp["ortools_makespan"] - cmp["negotiated_makespan"]
-    vc3.metric(
+    delta_ortools = cmp["ortools_makespan"] - cmp["unconstrained_makespan"]
+    vc4.metric(
         "Zentrale Optimierung (CP-SAT)", f"{cmp['ortools_makespan']:.1f} min",
-        delta=f"{delta_ortools:+.1f} min ggü. Verhandlung", delta_color="inverse",
+        delta=f"{delta_ortools:+.1f} min ggü. Verhandlung (unbeschränkt)", delta_color="inverse",
         help=f"Echter industrieller Solver, {cmp['ortools_wall_time']:.2f}s - "
         + ("beweist Optimalität." if cmp["ortools_optimal"] else "Zeitlimit erreicht, beste gefundene Lösung."),
     )
 else:
-    vc3.metric("Zentrale Optimierung (CP-SAT)", "kein Ergebnis im Zeitlimit")
+    vc4.metric("Zentrale Optimierung (CP-SAT)", "kein Ergebnis im Zeitlimit")
 
 if cmp["gap_pct_raw"] is not None:
     st.caption(
-        f"Lücke zu CP-SAT: **{cmp['gap_pct_raw']:.1f}%** (roh) → **{cmp['gap_pct_negotiated']:.1f}%** "
-        f"(nach Verhandlung)."
-        + (f" Geschlossen: **{cmp['gap_closed_pct']:.0f}%** der ursprünglichen Lücke."
-           if cmp["gap_closed_pct"] is not None else "")
+        f"Lücke zu CP-SAT: **{cmp['gap_pct_raw']:.1f}%** (roh) → **{cmp['gap_pct_constrained']:.1f}%** "
+        f"(Reichweite {communication_range:.1f}) → **{cmp['gap_pct_unconstrained']:.1f}%** (unbeschränkt)."
+        + (f" Geschlossen bei aktueller Reichweite: **{cmp['gap_closed_pct_constrained']:.0f}%** der "
+           f"ursprünglichen Lücke."
+           if cmp["gap_closed_pct_constrained"] is not None else "")
     )
 
     # Reihenfolge ist wichtig: eine grosse VERBLEIBENDE Lücke ist die eigentliche
     # "eigene Schwäche"-Aussage dieses Stücks - das gilt auch dann, wenn die
     # Verhandlung schon einen großen ANTEIL der ursprünglichen Lücke geschlossen hat
     # (56% geschlossen bei 24.6% verbleibender Lücke ist immnoch kein Erfolg).
-    if negotiation.reached_local_optimum and cmp["gap_pct_negotiated"] >= C.GAP_REMAINING_WARNING_THRESHOLD_PCT:
+    if (
+        negotiation.reached_local_optimum
+        and cmp["gap_pct_constrained"] >= C.GAP_REMAINING_WARNING_THRESHOLD_PCT
+    ):
         st.warning(
             f"⚠️ Die Verhandlung erreicht ein **lokales Optimum** (kein wechselseitiger Tausch hilft mehr), "
-            f"aber es bleibt eine spürbare Lücke von **{cmp['gap_pct_negotiated']:.1f}%** zum zentralen "
+            f"aber es bleibt eine spürbare Lücke von **{cmp['gap_pct_constrained']:.1f}%** zum zentralen "
             f"Optimum. Paarweise Tausche allein reichen hier nicht aus - genau das motiviert die übrigen "
             f"Stücke dieser Linie (Kombinatorische Auktionen, Distributed Constraint Optimization, "
             f"Multi-Agent Reinforcement Learning), die diese Grenze über andere Mechanismen überwinden."
         )
-    elif cmp["gap_closed_pct"] is not None and cmp["gap_closed_pct"] >= C.GAP_CLOSED_HIGHLIGHT_THRESHOLD_PCT:
+    elif cmp["gap_closed_pct_constrained"] is not None and cmp["gap_closed_pct_constrained"] >= C.GAP_CLOSED_HIGHLIGHT_THRESHOLD_PCT:
         st.success(
-            f"✅ Die Task-Swap-Verhandlung schließt **{cmp['gap_closed_pct']:.0f}%** der ursprünglichen "
-            f"Lücke zum zentralen Optimum - ein deutlicher Gewinn, ganz ohne zentrale Kontrolle."
+            f"✅ Die Task-Swap-Verhandlung schließt **{cmp['gap_closed_pct_constrained']:.0f}%** der "
+            f"ursprünglichen Lücke zum zentralen Optimum - ein deutlicher Gewinn, ganz ohne zentrale Kontrolle."
         )
-    elif cmp["negotiated_swap_count"] == 0:
+    elif cmp["constrained_swap_count"] == 0:
         st.info(
             "Kein wechselseitiger Tausch verbessert diese Zuteilung - das Contract Net Protocol war hier "
             "bereits (zufällig) swap-optimal, obwohl eine reale Lücke zum zentralen Optimum bleibt."
         )
     else:
         st.info("Bei dieser Instanz ist die verbleibende Lücke bereits klein.")
+
+comm_cost = cmp["decentralization_cost_min"]
+if comm_cost > 0.05:
+    blocked_desc = ", ".join(
+        f"Agent {a + 1} und Agent {b + 1} (Distanz {d:.1f})" for a, b, d in cmp["blocked_pairs"][:3]
+    )
+    st.warning(
+        f"📡 **Preis der Dezentralität**: bei Kommunikationsreichweite **{communication_range:.1f}** "
+        f"erreicht die Verhandlung {cmp['constrained_makespan']:.1f} min. Mit uneingeschränkter "
+        f"Kommunikation (identischer Algorithmus, nur ohne das Distanz-Limit) wären es "
+        f"{cmp['unconstrained_makespan']:.1f} min - das kostet **{comm_cost:.1f} min**"
+        + (f" (**{cmp['decentralization_cost_pct']:.1f}%**)" if cmp["decentralization_cost_pct"] is not None else "")
+        + f", weil {blocked_desc} zu weit auseinander liegen, um zu verhandeln."
+    )
+else:
+    st.caption(
+        "📡 Bei der aktuellen Kommunikationsreichweite blockiert keine Distanz einen verbessernden "
+        "Tausch - Ergebnis identisch zu uneingeschränkter Kommunikation."
+    )
+
+st.info(
+    f"🛡️ **Robustheit statt Ausfall**: selbst bei vollständigem Kommunikationsausfall "
+    f"(Reichweite = 0) liefert dieses System **{cmp['worst_case_makespan']:.1f} min** - eine "
+    f"vollständige, gültige, sofort ausführbare Zuteilung (exakt das Contract-Net-Ergebnis, nur ohne "
+    f"Verbesserung). Contract Net selbst braucht in Phase 1 gar keine Agent-zu-Agent-Kommunikation. Ein "
+    f"zentraler Solver, der zum Rechnen erst alle Information einsammeln muss, liefert bei einem "
+    f"Kommunikationsausfall **gar nichts** - kein Single Point of Failure ist der eigentliche Vorteil "
+    f"der Dezentralität, nicht (nur) ihre Lösungsqualität."
+)
 
 st.markdown("---")
 
@@ -368,22 +452,48 @@ Pro Runde wird der Tausch mit dem **kleinsten** $\Delta$ über alle Agenten- und
 Auftragspaare gewählt (steilster Abstieg). Terminiert, wenn eine vollständige
 Abtastung keinen $\Delta < -\varepsilon$ mehr findet - das **lokale Optimum**.
 
+**Kommunikations-Gate, formal**: ein Agentenpaar $(a, b)$ wird überhaupt nur
+betrachtet, wenn
+
+$$
+|\text{pos}_{\text{final}}(a) - \text{pos}_{\text{final}}(b)| \leq \text{communication\_range}
+$$
+
+gilt - unter Verwendung der ROHEN physischen Distanz, nicht der (durch
+`travel_time_per_unit` skalierten) Anfahrtszeit. Das trennt zwei unabhängige
+Größen: wie teuer eine Fahrt ist, und wie weit ein Agent überhaupt kommunizieren
+kann.
+
 **Online/Offline/Lokal, formal**: Contract Net liefert $\text{ALG}$, ein
 Online-Ergebnis ohne Zukunftskenntnis. Die Verhandlung liefert $\text{LS}$
 ("local search") - **offline** (kennt die volle Zuteilung), aber nur über ein
-eingeschränktes Nachbarschaftsmodell (paarweise, wechselseitige Tausche) gesucht,
-nicht erschöpfend. CP-SAT liefert $\text{OPT}$, das globale Offline-Optimum. Per
-Konstruktion gilt $\text{ALG} \geq \text{LS} \geq \text{OPT}$. Die **kompetitive
-Analyse** (Sleator & Tarjan, 1985), die schon den Contract-Net-vs-CP-SAT-Vergleich
-in contract-net-demo einordnet, gilt hier zweifach: $\text{LS}/\text{OPT}$ ist der
-kompetitive Faktor einer LOKALEN Suche - eine im Portfolio verbreitete, aber
-grundsätzlich andere Größe als $\text{ALG}/\text{OPT}$, da $\text{LS}$ mit voller
-Information arbeitet und trotzdem suboptimal bleiben kann - nicht wegen fehlender
-Zukunftskenntnis, sondern wegen der eingeschränkten Nachbarschaft.
+eingeschränktes Nachbarschaftsmodell (paarweise, wechselseitige Tausche, zusätzlich
+durch die Kommunikationsreichweite begrenzt) gesucht, nicht erschöpfend. CP-SAT
+liefert $\text{OPT}$, das globale Offline-Optimum. Damit ergibt sich die
+geschärfte Kette
 
-Implementiert in `cn_negotiation.py` (`negotiate`, das Tauschverfahren),
-`cn_schedule.py` (`schedule_from_assignment`, die gemeinsame Neuberechnung) und
-`cn_negotiation_evaluation.py` (`three_way_comparison`, der Dreiweg-Vergleich).
+$$
+\text{ALG} = \text{LS}(0) \;\geq\; \text{LS}(\text{range}) \;\geq\; \text{LS}(\infty) \;\geq\; \text{OPT}
+$$
+
+Die ERSTE Ungleichung ($\text{LS}(0) = \text{ALG}$) und die dazwischen sind
+**beweisbar**: steilster Abstieg akzeptiert nur echte Verbesserungen, und bei
+`communication_range=0` existiert kein zulässiges Agentenpaar, also bleibt das
+Ergebnis exakt $\text{ALG}$. Die Ungleichung $\text{LS}(\text{range}) \geq
+\text{LS}(\infty)$ ist dagegen **nicht** beweisbar - Lokalsuche ist pfadabhängig,
+eine engere Nachbarschaft kann in seltenen Fällen einen zufällig besseren Pfad
+nehmen; das wird als ehrlicher Fakt behandelt, nicht als erzwungene Testinvariante.
+Die **kompetitive Analyse** (Sleator & Tarjan, 1985), die schon den
+Contract-Net-vs-CP-SAT-Vergleich in contract-net-demo einordnet, gilt hier
+zweifach: $\text{LS}/\text{OPT}$ ist der kompetitive Faktor einer LOKALEN Suche -
+eine grundsätzlich andere Größe als $\text{ALG}/\text{OPT}$, da $\text{LS}$ mit
+voller Information arbeitet und trotzdem suboptimal bleiben kann, nicht wegen
+fehlender Zukunftskenntnis, sondern wegen der eingeschränkten Nachbarschaft.
+
+Implementiert in `cn_negotiation.py` (`negotiate`, das Tauschverfahren inkl.
+Kommunikations-Gate), `cn_schedule.py` (`schedule_from_assignment`, die
+gemeinsame Neuberechnung) und `cn_negotiation_evaluation.py`
+(`tier_comparison`, der Vierweg-Vergleich).
         """
     )
 
