@@ -18,8 +18,11 @@ POSITION_RANGE_MAX = 20.0
 # Kommunikationsreichweite (Phase 2 only): wie weit zwei Agenten physisch voneinander
 # entfernt sein dürfen, um überhaupt einen Tausch zu verhandeln - rohe Distanz, NICHT
 # durch travel_time_per_unit skaliert (zwei unabhängige Größen: Anfahrtskosten vs.
-# Kommunikationsreichweite). Max = POSITION_RANGE_MAX, da Agenten-Endpositionen nie
-# weiter auseinander liegen können. Default = Max = uneingeschränkt (reproduziert das
+# Kommunikationsreichweite). Beruht auf den STARTPOSITIONEN, nicht den Endpositionen
+# nach Phase 1 - die Verhandlung passiert, bevor irgendein Agent losgefahren ist (ein
+# Agent, der seine Warteschlange schon abgearbeitet hätte, hätte nichts mehr zu
+# tauschen). Max = POSITION_RANGE_MAX, da Agenten-Startpositionen nie weiter
+# auseinander liegen können. Default = Max = uneingeschränkt (reproduziert das
 # Verhalten vor Einführung dieses Reglers exakt).
 DEFAULT_COMMUNICATION_RANGE = POSITION_RANGE_MAX
 COMMUNICATION_RANGE_MIN, COMMUNICATION_RANGE_MAX = 0.0, POSITION_RANGE_MAX
@@ -61,13 +64,14 @@ GAP_REMAINING_WARNING_THRESHOLD_PCT = 20.0
 #   Mehrere Verhandlungsrunden:       3 Tausche, gap_raw=34.3%, gap_neg=13.0%, closed=62%
 #   Verhandlung stößt an ihre Grenzen: 2 Tausche, gap_raw=56.2%, gap_neg=24.6%, closed=56%
 # Die ersten 4 Presets haben communication_range=POSITION_RANGE_MAX (uneingeschränkt) -
-# ihr Punkt ist die Tausch-Dynamik selbst, nicht Kommunikation. Preset 5 (kalibriert via
-# eigenem calibrate_presets.py-Lauf, 2026-09-07, seither gelöscht) zeigt gezielt einen
-# durch begrenzte Kommunikationsreichweite blockierten Tausch: die beiden Agenten enden
-# 8.8 Positionseinheiten auseinander, die Reichweite ist auf 8.3 gesetzt - knapp zu
-# kurz. Uneingeschränkt schließt der eine mögliche Tausch die Lücke fast vollständig
-# (76.1% -> 1.0%, praktisch CP-SAT-Niveau); eingeschränkt bleibt exakt das rohe
-# CNP-Ergebnis (0 Tausche) - decentralization_cost_pct = 74.4%.
+# ihr Punkt ist die Tausch-Dynamik selbst, nicht Kommunikation. Preset 5 zeigt gezielt
+# einen durch begrenzte Kommunikationsreichweite blockierten Tausch: bei n_agents=2
+# stehen die Agenten-Startpositionen bei generate_instance IMMER exakt 10.0
+# Positionseinheiten auseinander (deterministisch, unabhängig vom Seed - (0.5*20/2)
+# und (1.5*20/2)), die Reichweite ist auf 9.5 gesetzt - knapp zu kurz. Uneingeschränkt
+# schließt der eine mögliche Tausch die Lücke fast vollständig (76.1% -> 1.0%,
+# praktisch CP-SAT-Niveau); eingeschränkt bleibt exakt das rohe CNP-Ergebnis
+# (0 Tausche) - decentralization_cost_pct = 74.4%.
 PRESETS = {
     "Bereits swap-optimal": {
         "n_jobs": 6, "n_agents": 2, "duration_variability": 0.0,
@@ -87,7 +91,7 @@ PRESETS = {
     },
     "Kommunikation begrenzt den Tausch": {
         "n_jobs": 6, "n_agents": 2, "duration_variability": 0.0,
-        "travel_time_per_unit": 1.5, "seed": 60, "communication_range": 8.3,
+        "travel_time_per_unit": 1.5, "seed": 60, "communication_range": 9.5,
     },
 }
 
@@ -102,7 +106,7 @@ PRESET_HELP = {
         "und schließt gut die Hälfte der Lücke - doch ein spürbarer Rest bleibt, den nur "
         "ein anderer Mechanismus (Auktionen, DCOP, MARL) noch schließen könnte.",
     "Kommunikation begrenzt den Tausch": "Zwei Agenten könnten sich hier gegenseitig "
-        "verbessern - aber ihre Endpositionen liegen weiter auseinander, als die "
+        "verbessern - aber ihre Startpositionen liegen weiter auseinander, als die "
         "eingestellte Kommunikationsreichweite erlaubt. Der Preis der Dezentralität "
         "wird hier sichtbar.",
 }

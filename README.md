@@ -36,8 +36,11 @@ Mechanisch ist das zunächst nichts weiter als Greedy-Konstruktion (Phase 1) +
 Lokalsuche-Politur (Phase 2) - ein Muster, das im Portfolio bereits mehrfach
 existiert (`quaycrane-demo`, `dock-demo`), nur mit Agenten-Vokabular. Der einzige
 echte Unterschied ist eine **Kommunikationsreichweite**: ein Agentenpaar wird nur
-für einen Tausch betrachtet, wenn die rohe physische Distanz ihrer Endpositionen
-die eingestellte Reichweite nicht überschreitet (unabhängig von der Anfahrtszeit
+für einen Tausch betrachtet, wenn die rohe physische Distanz ihrer
+**Startpositionen** die eingestellte Reichweite nicht überschreitet - bewusst
+nicht ihrer Endpositionen nach Phase 1: die Verhandlung passiert, sobald der
+volle Plan steht, aber bevor irgendein Agent losgefahren ist, ein Agent hat zu
+diesem Zeitpunkt also gar nichts "abgearbeitet" (unabhängig von der Anfahrtszeit
 pro Positionseinheit - zwei getrennte Größen). Ohne dieses Gate wäre die
 Verhandlung ununterscheidbar von einer zentralen Lokalsuche. Ein `tier_comparison`
 -Vergleich (`cn_negotiation_evaluation.py`) rechnet zusätzlich zwei Diagnose-Läufe
@@ -88,7 +91,7 @@ Multi-Agent Reinforcement Learning).
 - **Determinismus**: gleiche Instanz, zweimal verhandelt, liefert identische
   Tausch-Sequenz (deterministisches Tie-Breaking).
 - **Kommunikationsreichweite**: ein Agentenpaar wird nur betrachtet, wenn die
-  rohe Distanz ihrer Endpositionen die eingestellte Reichweite nicht
+  rohe Distanz ihrer Startpositionen die eingestellte Reichweite nicht
   überschreitet - hand-berechnete Grenzfall-Tests sichern die `<=`-Grenze exakt
   ab, unabhängig von `travel_time_per_unit`.
 - **Robustheits-Kern**: bei Reichweite 0 (Totalausfall) reduziert sich die

@@ -1,6 +1,6 @@
 from cn_negotiation import EPSILON, negotiate
 from cn_ortools_reference import SCALE, solve_with_ortools
-from cn_protocol import run_protocol
+from cn_protocol import ProtocolResult, run_protocol
 from cn_scenario import Instance, Job, generate_instance
 from cn_schedule import schedule_from_assignment
 
@@ -209,43 +209,60 @@ def test_default_communication_range_is_truly_unconstrained():
         assert default.final_makespan == explicit_inf.final_makespan, f"seed={seed}"
 
 
+def _fake_protocol_result(instance, schedules):
+    # Baut einen minimalen ProtocolResult direkt aus einer Zuteilung, ohne den echten
+    # CNP-Bietprozess zu durchlaufen - legitim hier, weil negotiate() nur .schedules
+    # liest (agent_finish_times/makespan werden intern über schedule_from_assignment
+    # neu berechnet, .steps wird für das Kommunikations-Gate nicht mehr gebraucht -
+    # das Gate nutzt instance.agent_start_positions direkt, siehe cn_negotiation.py).
+    finish_times, makespan = schedule_from_assignment(instance, schedules)
+    return ProtocolResult(steps=(), assignment={}, schedules=schedules, agent_finish_times=finish_times, makespan=makespan)
+
+
 def test_communication_range_hand_computed_gate_boundary():
-    # Wiederverwendet das Beispiel aus test_swap_reduces_makespan_hand_computed_tiny_example:
-    # Agent 0 endet bei Position 0, Agent 1 bei Position 50 (nach dem Tausch) - aber die
-    # ENDPOSITIONEN nach Phase 1 (vor dem Tausch) sind hier relevant: A0 bei 0.0 (Job 0),
-    # A1 bei 50.0 (Job 2) - Distanz 50.0 exakt.
+    # Agent 0 startet bei 0.0, Agent 1 bei 50.0 - Distanz 50.0 exakt. Agent 0 haelt
+    # Job0 (pos0, dauer10) und Job1 (pos50, dauer1), Agent 1 haelt Job2 (pos0, dauer1).
+    # Agent 0: 0 -> Job0 (0+0+10=10) -> Job1 (10+50+1=61). Agent 1: 50 -> Job2
+    # (0+50+1=51). Makespan=61. Der Tausch Job1<->Job2 (Agent0 gibt den weiten
+    # Auftrag ab, Agent1 den nahen) senkt den Makespan drastisch auf 11.
     jobs = (
         Job(index=0, position=0.0, duration=10.0),
-        Job(index=1, position=0.0, duration=1.0),
-        Job(index=2, position=50.0, duration=1.0),
+        Job(index=1, position=50.0, duration=1.0),
+        Job(index=2, position=0.0, duration=1.0),
     )
-    instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 0.0))
-    result = run_protocol(instance)
-    assert result.steps[-1].agent_positions_after == (0.0, 50.0)
+    instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 50.0))
+    schedules = {0: (0, 1), 1: (2,)}
+    result = _fake_protocol_result(instance, schedules)
+    assert result.makespan == 61.0
 
     blocked = negotiate(instance, result, communication_range=49.0)
     assert blocked.swaps == ()
-    assert blocked.final_makespan == 52.0
+    assert blocked.final_makespan == 61.0
 
     allowed = negotiate(instance, result, communication_range=50.0)
     assert len(allowed.swaps) == 1
-    assert allowed.final_makespan == 51.0
+    assert allowed.swaps[0].job_from_a == 1
+    assert allowed.swaps[0].job_from_b == 2
+    assert allowed.final_makespan == 11.0
 
 
 def test_communication_range_uses_raw_distance_not_travel_time():
     jobs = (
         Job(index=0, position=0.0, duration=10.0),
-        Job(index=1, position=0.0, duration=1.0),
-        Job(index=2, position=50.0, duration=1.0),
+        Job(index=1, position=50.0, duration=1.0),
+        Job(index=2, position=0.0, duration=1.0),
     )
+    schedules = {0: (0, 1), 1: (2,)}
     for travel_time_per_unit in (0.2, 1.0, 2.0):
-        instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 0.0), travel_time_per_unit=travel_time_per_unit)
-        result = run_protocol(instance)
+        instance = _instance(
+            jobs, n_agents=2, agent_start_positions=(0.0, 50.0), travel_time_per_unit=travel_time_per_unit
+        )
+        result = _fake_protocol_result(instance, schedules)
         blocked = negotiate(instance, result, communication_range=49.0)
         assert blocked.swaps == (), f"travel_time_per_unit={travel_time_per_unit}"
 
 
-def test_communication_range_final_positions_use_start_position_for_untouched_agents():
+def test_communication_range_ignores_idle_agents_regardless_of_position_source():
     instance = generate_instance(n_jobs=2, n_agents=4, duration_variability=0.5, travel_time_per_unit=1.0, seed=1)
     result = run_protocol(instance)
     empty_agents = {a for a, jobs in result.schedules.items() if len(jobs) == 0}

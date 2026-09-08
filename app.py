@@ -104,13 +104,17 @@ ein Auftrag gehört, nie die Reihenfolge innerhalb der Warteschlange eines Agent
 oder um Mehrfach-Tausche wäre denkbar, ist hier aber bewusst nicht Teil des Mechanismus.
 
 **Kommunikationsreichweite**: ein Agentenpaar wird nur betrachtet, wenn die ROHE
-physische Distanz ihrer Endpositionen (nach Phase 1) die eingestellte
-Kommunikationsreichweite nicht überschreitet - unabhängig von der Anfahrtszeit pro
-Positionseinheit (das ist eine zweite, unabhängige Größe: wie teuer eine Fahrt ist,
-ist nicht dasselbe wie wie weit ein Agent überhaupt kommunizieren kann). Das ist der
-einzige Punkt in dieser Demo, an dem "mehrere Agenten" tatsächlich etwas anderes
-bedeutet als "eine zentrale lokale Suche" - ohne dieses Gate würde die Verhandlung
-mechanisch exakt einer zentralen Lokalsuche entsprechen, nur mit Agenten-Vokabular.
+physische Distanz ihrer **Startpositionen** die eingestellte Kommunikationsreichweite
+nicht überschreitet - bewusst NICHT ihrer Endpositionen nach Phase 1: die Verhandlung
+findet statt, sobald der volle Plan steht, aber BEVOR irgendein Agent auch nur einen
+Meter gefahren ist. Zu diesem Zeitpunkt steht jeder Agent noch an seiner Startposition
+(ein Agent, der seine Aufträge schon abgearbeitet hätte, hätte nichts mehr zu
+tauschen). Unabhängig von der Anfahrtszeit pro Positionseinheit (das ist eine zweite,
+unabhängige Größe: wie teuer eine Fahrt ist, ist nicht dasselbe wie wie weit ein
+Agent überhaupt kommunizieren kann). Das ist der einzige Punkt in dieser Demo, an dem
+"mehrere Agenten" tatsächlich etwas anderes bedeutet als "eine zentrale lokale
+Suche" - ohne dieses Gate würde die Verhandlung mechanisch exakt einer zentralen
+Lokalsuche entsprechen, nur mit Agenten-Vokabular.
 
 **Die ehrliche Grenze dieses Stücks - und ihre Kehrseite**: paarweise, wechselseitige
 Tausche sind eine **lokale** Suche - sie können in einem lokalen Optimum
@@ -456,13 +460,15 @@ Abtastung keinen $\Delta < -\varepsilon$ mehr findet - das **lokale Optimum**.
 betrachtet, wenn
 
 $$
-|\text{pos}_{\text{final}}(a) - \text{pos}_{\text{final}}(b)| \leq \text{communication\_range}
+|\text{pos}_{\text{start}}(a) - \text{pos}_{\text{start}}(b)| \leq \text{communication\_range}
 $$
 
-gilt - unter Verwendung der ROHEN physischen Distanz, nicht der (durch
-`travel_time_per_unit` skalierten) Anfahrtszeit. Das trennt zwei unabhängige
-Größen: wie teuer eine Fahrt ist, und wie weit ein Agent überhaupt kommunizieren
-kann.
+gilt - unter Verwendung der STARTPOSITIONEN (nicht der Endpositionen nach Phase 1:
+die Verhandlung passiert, bevor irgendein Agent losgefahren ist, ein Agent, der
+seine Warteschlange schon abgearbeitet hätte, hätte nichts mehr zu tauschen) und
+der ROHEN physischen Distanz, nicht der (durch `travel_time_per_unit` skalierten)
+Anfahrtszeit. Das trennt zwei unabhängige Größen: wie teuer eine Fahrt ist, und
+wie weit ein Agent überhaupt kommunizieren kann.
 
 **Online/Offline/Lokal, formal**: Contract Net liefert $\text{ALG}$, ein
 Online-Ergebnis ohne Zukunftskenntnis. Die Verhandlung liefert $\text{LS}$

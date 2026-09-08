@@ -14,10 +14,16 @@ Tausche beschränkte lokale Suche muss nicht das globale Optimum erreichen,
 das der zentrale CP-SAT-Referenzlöser findet).
 
 Ein Agentenpaar wird nur betrachtet, wenn die ROHE physische Distanz ihrer
-Endpositionen (nach Phase 1) die `communication_range` nicht überschreitet -
-das ist der einzige Punkt in dieser Demo, an dem "mehrere Agenten" tatsächlich
-etwas anderes bedeutet als "eine zentrale lokale Suche": Phase 1 (Bieten)
-braucht ohnehin nie Agent-zu-Agent-Kommunikation, nur diese Verhandlung tut es.
+STARTPOSITIONEN die `communication_range` nicht überschreitet - bewusst NICHT
+ihrer Endpositionen nach Phase 1: die Verhandlung findet statt, sobald der volle
+Plan steht, aber BEVOR irgendein Agent auch nur einen Meter gefahren ist. Zu
+diesem Zeitpunkt steht jeder Agent noch an seiner Startposition - "wer kann mit
+wem reden" ist also eine Frage der Startpositionen, nicht einer hypothetischen
+Position, die ein Agent erst nach Abarbeitung seiner gesamten (noch gar nicht
+begonnenen) Warteschlange erreichen würde. Das ist der einzige Punkt in dieser
+Demo, an dem "mehrere Agenten" tatsächlich etwas anderes bedeutet als "eine
+zentrale lokale Suche": Phase 1 (Bieten) braucht ohnehin nie Agent-zu-Agent-
+Kommunikation, nur diese Verhandlung tut es.
 Bei `communication_range=0` findet sich kein einziges gültiges Paar - das
 Ergebnis ist dann exakt das unveränderte Contract-Net-Ergebnis, nie ein Absturz
 oder ein ungültiger Zustand (siehe `test_zero_communication_range_reduces_to_
@@ -70,10 +76,9 @@ def negotiate(instance, protocol_result, max_rounds=50, epsilon=EPSILON, communi
     schedules = {a: tuple(jobs) for a, jobs in protocol_result.schedules.items()}
     agent_finish_times, makespan = schedule_from_assignment(instance, schedules)
 
-    final_positions = (
-        protocol_result.steps[-1].agent_positions_after if protocol_result.steps
-        else instance.agent_start_positions
-    )
+    # Startpositionen, nicht Endpositionen: die Verhandlung passiert, bevor irgendein
+    # Agent losgefahren ist (siehe Modul-Docstring).
+    start_positions = instance.agent_start_positions
 
     swaps = []
     round_number = 0
@@ -88,7 +93,7 @@ def negotiate(instance, protocol_result, max_rounds=50, epsilon=EPSILON, communi
         for i in range(len(agent_ids)):
             for j in range(i + 1, len(agent_ids)):
                 agent_a, agent_b = agent_ids[i], agent_ids[j]
-                if abs(final_positions[agent_a] - final_positions[agent_b]) > communication_range:
+                if abs(start_positions[agent_a] - start_positions[agent_b]) > communication_range:
                     continue
                 for job_from_a in schedules[agent_a]:
                     for job_from_b in schedules[agent_b]:

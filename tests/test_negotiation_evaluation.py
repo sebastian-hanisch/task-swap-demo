@@ -124,12 +124,15 @@ def test_tier_comparison_unconstrained_matches_infinite_range_call():
 
 
 def test_tier_comparison_blocked_pairs_matches_hand_computed_example():
+    # Agentenpaar-Distanz basiert auf STARTPOSITIONEN (0.0 und 50.0) - siehe
+    # cn_negotiation.py-Docstring und test_negotiation.py::
+    # test_communication_range_hand_computed_gate_boundary fuer die volle Herleitung.
     jobs = (
         Job(index=0, position=0.0, duration=10.0),
-        Job(index=1, position=0.0, duration=1.0),
-        Job(index=2, position=50.0, duration=1.0),
+        Job(index=1, position=50.0, duration=1.0),
+        Job(index=2, position=0.0, duration=1.0),
     )
-    instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 0.0))
+    instance = _instance(jobs, n_agents=2, agent_start_positions=(0.0, 50.0))
     result = run_protocol(instance)
 
     negotiation_blocked = negotiate(instance, result, communication_range=49.0)

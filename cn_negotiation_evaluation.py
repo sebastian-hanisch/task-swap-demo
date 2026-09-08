@@ -50,15 +50,14 @@ def tier_comparison(
         instance, protocol_result, max_rounds=max_rounds, epsilon=epsilon, communication_range=0.0
     )
 
-    final_positions = (
-        protocol_result.steps[-1].agent_positions_after if protocol_result.steps
-        else instance.agent_start_positions
-    )
+    # Startpositionen, nicht Endpositionen - siehe cn_negotiation.py-Docstring:
+    # die Verhandlung passiert, bevor irgendein Agent losgefahren ist.
+    start_positions = instance.agent_start_positions
     blocked_pairs = tuple(
-        (a, b, abs(final_positions[a] - final_positions[b]))
+        (a, b, abs(start_positions[a] - start_positions[b]))
         for a in range(instance.n_agents)
         for b in range(a + 1, instance.n_agents)
-        if abs(final_positions[a] - final_positions[b]) > communication_range
+        if abs(start_positions[a] - start_positions[b]) > communication_range
     )
 
     ortools_result = solve_with_ortools(instance, time_limit_seconds=time_limit_seconds)
