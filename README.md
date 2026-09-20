@@ -1,5 +1,7 @@
 # Task-Swap-Verhandlung nach dem Contract Net Protocol – Streamlit-Demo
 
+**[→ Demo live ausprobieren](https://sebastianhanisch-task-swap-demo.streamlit.app/)**
+
 Zweites Stück der "Konzepte"-Reihe für die Website "Sebastian Hanisch – Operations
 Research und Machine Learning", **Multi-Agenten-Koordinations-Linie** - direkte
 Fortsetzung von [contract-net-demo](../contract-net-demo): das **Contract Net
