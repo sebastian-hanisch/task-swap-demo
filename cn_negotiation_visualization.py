@@ -5,7 +5,7 @@ beiden gerade getauschten Aufträge optisch hervor."""
 
 import plotly.graph_objects as go
 
-from cn_visualization import AGENT_COLORS
+from cn_visualization import AGENT_COLORS, lock_axes
 
 
 def _negotiation_intervals(instance, schedules):
@@ -62,7 +62,7 @@ def build_negotiation_schedule_figure(instance, schedules, ortools_makespan=None
         categoryarray=[f"Agent {a + 1}" for a in range(instance.n_agents)],
         autorange="reversed",
     )
-    return fig
+    return lock_axes(fig)
 
 
 def describe_swap(swap, makespan_before):
