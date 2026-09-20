@@ -144,7 +144,7 @@ PRESET_HELP = C.PRESET_HELP
 preset_cols = st.columns(len(C.PRESETS))
 for i, name in enumerate(C.PRESETS.keys()):
     with preset_cols[i]:
-        st.button(name, use_container_width=True, on_click=apply_preset, args=(name,), help=PRESET_HELP[name])
+        st.button(name, width="stretch", on_click=apply_preset, args=(name,), help=PRESET_HELP[name])
 
 st.caption(
     "🔗 Die Adresszeile oben spiegelt Ihre aktuelle Konfiguration wider – einfach kopieren, "
@@ -172,7 +172,7 @@ with st.sidebar:
 
     st.button(
         "🎲 Neue Instanz generieren",
-        use_container_width=True,
+        width="stretch",
         on_click=randomize_seed,
         help="Würfelt einen neuen Zufalls-Seed für Auftragspositionen und -dauern.",
     )
@@ -212,7 +212,7 @@ with step_col:
             help="Ein Schritt = eine angekündigte und vergebene Auftrags-Runde, in Ankunftsreihenfolge.",
         )
 with play_col:
-    auto_play_cnp = st.button("▶️ Abspielen", use_container_width=True, key="cnp_play")
+    auto_play_cnp = st.button("▶️ Abspielen", width="stretch", key="cnp_play")
 
 with st.spinner("Verhandle Task-Swaps..."):
     negotiation = _compute_negotiation(*scenario_key, communication_range)
@@ -227,11 +227,11 @@ bid_slot = bid_col.empty()
 def _render_cnp(current_step):
     schedule_slot.plotly_chart(
         build_schedule_figure(instance, result, current_step, ortools_makespan),
-        use_container_width=True, key=f"cnp_schedule_{current_step}",
+        width="stretch", key=f"cnp_schedule_{current_step}",
     )
     bid_slot.plotly_chart(
         build_bid_chart(result.steps[current_step]),
-        use_container_width=True, key=f"cnp_bids_{current_step}",
+        width="stretch", key=f"cnp_bids_{current_step}",
     )
 
 
@@ -278,7 +278,7 @@ else:
             "Jede weitere Stufe zeigt einen akzeptierten Tausch.",
         )
     with neg_play_col:
-        auto_play_neg = st.button("▶️ Abspielen", use_container_width=True, key="neg_play")
+        auto_play_neg = st.button("▶️ Abspielen", width="stretch", key="neg_play")
 
     neg_chart_slot = st.empty()
     neg_caption_slot = st.empty()
@@ -293,7 +293,7 @@ else:
         schedules, highlight = _schedules_and_highlight(s)
         neg_chart_slot.plotly_chart(
             build_negotiation_schedule_figure(instance, schedules, ortools_makespan, highlight),
-            use_container_width=True, key=f"neg_schedule_{s}",
+            width="stretch", key=f"neg_schedule_{s}",
         )
         if s == 0:
             neg_caption_slot.caption(f"Ausgangslage nach Contract Net - Makespan: {result.makespan:.1f} min.")
