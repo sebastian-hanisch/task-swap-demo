@@ -67,7 +67,7 @@ erreichtem lokalen Optimum eine spürbare Lücke behalten, und - mit der
 Kommunikationsreichweite - Instanzen, bei denen ein uneingeschränkt möglicher,
 fast optimaler Tausch allein an der physischen Distanz zweier Agenten scheitert
 (76% Lücke bleiben bestehen, obwohl uneingeschränkte Kommunikation sie auf 1%
-gedrückt hätte). Das motiviert die übrigen, noch nicht gebauten Stücke dieser
+gedrückt hätte). Das motiviert die weiteren, inzwischen gebauten Stücke dieser
 Linie (Kombinatorische Auktionen, Distributed Constraint Optimization,
 Multi-Agent Reinforcement Learning).
 
@@ -144,6 +144,4 @@ pytest tests/ -v
 
 ---
 
-Teil des [Operations-Research-Demo-Portfolios](https://sebastianhanisch.net/demos.html) von
-[Sebastian Hanisch](https://sebastianhanisch.net) – Operations Research und Machine Learning.
-Interesse an einer maßgeschneiderten Lösung? [Kontakt aufnehmen](https://sebastianhanisch.net/kontakt.html).
+Diese Demo ist Teil des Portfolios von [Sebastian Hanisch](https://sebastianhanisch.net) – Operations Research und Machine Learning ([Über mich](https://sebastianhanisch.net/ueber-mich.html)). Mehr zur Reihe: [Multi-Agenten-Koordination erklärt](https://sebastianhanisch.net/konzepte-multiagenten.html).

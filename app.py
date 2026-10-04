@@ -115,7 +115,7 @@ entsprechen, nur mit Agenten-Vokabular.
 **Die ehrliche Grenze dieses Stücks - und ihre Kehrseite**: paarweise, wechselseitige
 Tausche sind eine **lokale** Suche - sie können in einem lokalen Optimum
 steckenbleiben, das oberhalb des von CP-SAT gefundenen globalen Optimums liegt.
-Genau das motiviert die übrigen, noch nicht gebauten Stücke dieser Linie
+Genau das motiviert die weiteren, inzwischen gebauten Stücke dieser Linie
 (Kombinatorische Auktionen, Distributed Constraint Optimization, Multi-Agent
 Reinforcement Learning), die diese Grenze über jeweils einen anderen Mechanismus
 überwinden. Das ist aber nur die halbe Wahrheit: Contract Net selbst (Phase 1)
@@ -501,6 +501,6 @@ st.markdown("---")
 
 st.caption(
     "Diese Demo ist Teil des Portfolios von [Sebastian Hanisch](https://sebastianhanisch.net) – "
-    "Operations Research und Machine Learning. Interesse an einer maßgeschneiderten Lösung für "
-    "Ihr Unternehmen? [Kontakt aufnehmen](https://sebastianhanisch.net/kontakt.html)"
+    "Operations Research und Machine Learning ([Über mich](https://sebastianhanisch.net/ueber-mich.html)). "
+    "Mehr zur Reihe: [Multi-Agenten-Koordination erklärt](https://sebastianhanisch.net/konzepte-multiagenten.html)."
 )
