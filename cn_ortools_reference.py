@@ -20,6 +20,8 @@ from dataclasses import dataclass
 
 from ortools.sat.python import cp_model
 
+from cn_schedule import schedule_from_assignment
+
 SCALE = 10  # interne Zeitauflösung: 1 CP-SAT-Einheit = 0.1 Minuten
 
 
@@ -35,8 +37,9 @@ class ExactResult:
     optimal: bool
     assignment: dict  # job_index -> agent_id
     starts: dict  # job_index -> Startzeit (unskaliert)
-    makespan: float
+    makespan: float  # REALER Makespan der gefundenen Zuteilung+Reihenfolge (ungerundet neu berechnet)
     wall_time_ms: float
+    model_makespan: float = 0.0  # Zielwert des aufgerundeten CP-SAT-Modells (>= makespan)
 
 
 def build_model(instance):
@@ -110,11 +113,23 @@ def solve_with_ortools(instance, time_limit_seconds=10.0):
         assignment[j] = a
         starts[j] = solver.Value(start[j]) / SCALE
 
+    # Das Modell rundet jede Dauer/Anfahrt AUF (siehe _scaled): sein Zielwert liegt dadurch bis zu
+    # 2/SCALE je Auftrag ueber dem, was dieselbe Zuteilung real braucht - und damit auch ueber
+    # Zeitplaenen, die Contract Net oder die Verhandlung real erreichen (negative "Luecke").
+    # Gemeldet wird deshalb der REALE Makespan derselben Zuteilung/Reihenfolge, ungerundet
+    # nachgerechnet (Reihenfolge je Agent = aufsteigende CP-SAT-Startzeit).
+    schedules = {
+        a: tuple(sorted((j for j in range(n) if assignment[j] == a), key=lambda j: starts[j]))
+        for a in range(k)
+    }
+    _, real_makespan = schedule_from_assignment(instance, schedules)
+
     return ExactResult(
         feasible=True,
         optimal=status == cp_model.OPTIMAL,
         assignment=assignment,
         starts=starts,
-        makespan=solver.Value(makespan) / SCALE,
+        makespan=real_makespan,
         wall_time_ms=wall_time_ms,
+        model_makespan=solver.Value(makespan) / SCALE,
     )

@@ -13,7 +13,7 @@ Information, aber nur lokaler Suche - paarweise Tausche zwischen Agenten prüft.
 
 Dieselbe bewusst vereinfachte Kran-zu-Container-Auftrag-Zuweisung (keine
 gemeinsame Schiene, keine Non-Crossing-Regel) - `cn_scenario.py`, `cn_bidding.py`,
-`cn_protocol.py` und `cn_ortools_reference.py` sind wortgleiche Kopien aus
+`cn_protocol.py` und `cn_ortools_reference.py` (mit einer Ergänzung, siehe Referenzlöser) sind Kopien aus
 contract-net-demo. Jede Demo im Portfolio ist eigenständig lauffähig (eigenes
 venv, eigene Tests, eigenes Deployment), daher werden gemeinsame Bausteine
 kopiert statt importiert - dieselbe Linie teilt sich das Vehikel über die Zeit,
@@ -66,7 +66,7 @@ einzigen Tausch, der den Großteil der Lücke schließt, Instanzen, die trotz
 erreichtem lokalen Optimum eine spürbare Lücke behalten, und - mit der
 Kommunikationsreichweite - Instanzen, bei denen ein uneingeschränkt möglicher,
 fast optimaler Tausch allein an der physischen Distanz zweier Agenten scheitert
-(76% Lücke bleiben bestehen, obwohl uneingeschränkte Kommunikation sie auf 1%
+(77% Lücke bleiben bestehen, obwohl uneingeschränkte Kommunikation sie auf 2%
 gedrückt hätte). Das motiviert die weiteren, inzwischen gebauten Stücke dieser
 Linie (Kombinatorische Auktionen, Distributed Constraint Optimization,
 Multi-Agent Reinforcement Learning).
@@ -74,7 +74,12 @@ Multi-Agent Reinforcement Learning).
 ## Referenzlöser
 
 - **`cn_ortools_reference.py`**: echter Google-OR-Tools-CP-SAT-Solver (`OPT`),
-  wortgleich aus contract-net-demo übernommen.
+  aus contract-net-demo übernommen, mit einer Ergänzung: Das Modell rundet jede Dauer/Anfahrt
+  auf 0,1 min auf; sein Zielwert lag dadurch bis zu 2/10 min je Auftrag über dem realen Optimum (und
+  über Zeitplänen, die Contract Net oder Verhandlung real erreichen: in 45 von 120 Zufallsinstanzen
+  zeigte die Demo eine negative "Lücke"). Gemeldet wird jetzt der reale, ungerundet nachgerechnete Makespan
+  der gefundenen Zuteilung (`model_makespan` hält den Modellwert); gegen die Vollenumeration stimmt er
+  in den Zufallsmessungen fast immer exakt, in Einzelfällen liegt er bis ca. 0,1 min darüber.
 - **`cn_bruteforce.py`**: vollständige Enumeration für Tests, nutzt jetzt
   `cn_schedule.schedule_from_assignment` (derselbe Baustein wie die Verhandlung
   selbst) statt einer eigenen Kopie der Akkumulationsformel.
@@ -89,7 +94,7 @@ Multi-Agent Reinforcement Learning).
   verbessern.
 - **Ein-Agenten-Grenzfall**: ohne zweiten Agenten ist kein Tausch möglich.
 - **Optimalitätsschranke**: die Verhandlung schlägt nie das CP-SAT-Optimum (bis
-  auf die dokumentierte Rundungstoleranz des skalierten CP-SAT-Modells).
+  auf eine Restabweichung des skalierten CP-SAT-Modells von unter 0,1 min; in 3 von 400 Zufallsinstanzen sichtbar).
 - **Determinismus**: gleiche Instanz, zweimal verhandelt, liefert identische
   Tausch-Sequenz (deterministisches Tie-Breaking).
 - **Kommunikationsreichweite**: ein Agentenpaar wird nur betrachtet, wenn die

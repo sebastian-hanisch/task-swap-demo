@@ -52,25 +52,28 @@ GAP_CLOSED_HIGHLIGHT_THRESHOLD_PCT = 50.0
 # Ab welcher VERBLEIBENDEN Lücke (nach Verhandlung, ggü. CP-SAT) die ehrliche
 # Schwäche dieses Stücks (lokales Optimum, aber real bleibende Lücke) betont wird -
 # unabhängig davon, wie viel Prozent der ursprünglichen Lücke schon geschlossen
-# wurde (eine Instanz kann 56% schließen und trotzdem noch 24.6% Lücke übrig haben -
+# wurde (eine Instanz kann 56% schließen und trotzdem noch 25.4% Lücke übrig haben -
 # das ist immer noch die "Grenzen der lokalen Suche"-Aussage, kein Erfolg).
 GAP_REMAINING_WARNING_THRESHOLD_PCT = 20.0
 
 # Seeds empirisch kalibriert via calibrate_presets.py (2026-09-07, seither gelöscht) -
 # nicht der erste Versuch übernommen. Gemessene Werte (gap_raw = CNP roh vs. CP-SAT,
 # gap_neg = nach Verhandlung vs. CP-SAT, closed = geschlossener Anteil der Lücke):
-#   Bereits swap-optimal:             0 Tausche, gap_raw=16.7%,                closed=0%
-#   Ein Tausch schließt spürbar:      1 Tausch,  gap_raw=50.4%, gap_neg=10.4%, closed=79%
-#   Mehrere Verhandlungsrunden:       3 Tausche, gap_raw=34.3%, gap_neg=13.0%, closed=62%
-#   Verhandlung stößt an ihre Grenzen: 2 Tausche, gap_raw=56.2%, gap_neg=24.6%, closed=56%
+#   Bereits swap-optimal:             0 Tausche, gap_raw=17.7%,                closed=0%
+#   Ein Tausch schließt spürbar:      1 Tausch,  gap_raw=51.2%, gap_neg=11.0%, closed=79%
+#   Mehrere Verhandlungsrunden:       3 Tausche, gap_raw=35.4%, gap_neg=13.9%, closed=61%
+#   Verhandlung stößt an ihre Grenzen: 2 Tausche, gap_raw=57.2%, gap_neg=25.4%, closed=56%
+# (Neu gemessen 2026-10-05, nachdem cn_ortools_reference den REALEN statt des aufgerundeten
+# Modell-Makespans meldet; die Erstmessung lag je nach Preset 0,3-1,0 Prozentpunkte darunter,
+# weil das aufgerundete Optimum zu hoch war - gap_neg bei 4 Presets zu klein.)
 # Die ersten 4 Presets haben communication_range=POSITION_RANGE_MAX (uneingeschränkt) -
 # ihr Punkt ist die Tausch-Dynamik selbst, nicht Kommunikation. Preset 5 zeigt gezielt
 # einen durch begrenzte Kommunikationsreichweite blockierten Tausch: bei n_agents=2
 # stehen die Agenten-Startpositionen bei generate_instance IMMER exakt 10.0
 # Positionseinheiten auseinander (deterministisch, unabhängig vom Seed - (0.5*20/2)
 # und (1.5*20/2)), die Reichweite ist auf 9.5 gesetzt - knapp zu kurz. Uneingeschränkt
-# schließt der eine mögliche Tausch die Lücke fast vollständig (76.1% -> 1.0%,
-# praktisch CP-SAT-Niveau); eingeschränkt bleibt exakt das rohe CNP-Ergebnis
+# schließt der eine mögliche Tausch die Lücke fast vollständig (77.3% -> 1.7%,
+# knapp über CP-SAT-Niveau); eingeschränkt bleibt exakt das rohe CNP-Ergebnis
 # (0 Tausche) - decentralization_cost_pct = 74.4%.
 PRESETS = {
     "Bereits swap-optimal": {

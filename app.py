@@ -380,7 +380,7 @@ if cmp["gap_pct_raw"] is not None:
     # Reihenfolge ist wichtig: eine grosse VERBLEIBENDE Lücke ist die eigentliche
     # "eigene Schwäche"-Aussage dieses Stücks - das gilt auch dann, wenn die
     # Verhandlung schon einen großen ANTEIL der ursprünglichen Lücke geschlossen hat
-    # (56% geschlossen bei 24.6% verbleibender Lücke ist immnoch kein Erfolg).
+    # (56% geschlossen bei 25.4% verbleibender Lücke ist immnoch kein Erfolg).
     if (
         negotiation.reached_local_optimum
         and cmp["gap_pct_constrained"] >= C.GAP_REMAINING_WARNING_THRESHOLD_PCT
